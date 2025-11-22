@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Operator Login</title>
+    <style>
+        body {
+            margin: 20px;
+        }
+        div {
+            border: 1px solid black;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        input, button {
+            padding: 5px;
+            border: 1px solid black;
+        }
+        button {
+            background: white;
+            cursor: pointer;
+        }
+        .error {
+            background: lightgray;
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <a href="/">&larr; Back to Home</a>
+        <h1>Operator Login</h1>
+    </div>
+
+    <div th:if="${param.error}" class="error">
+        Invalid username or password.
+    </div>
+
+    <div th:if="${param.logout}">
+        You have been logged out successfully.
+    </div>
+
+    <div>
+        <h2>Please Sign In</h2>
+        <form th:action="@{/login}" method="post">
+            <div>
+                <label for="username">Username:</label><br>
+                <input type="text" id="username" name="username" required autofocus>
+            </div>
+            <div>
+                <label for="password">Password:</label><br>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <div>
+                <button type="submit">Sign In</button>
+            </div>
+        </form>
+    </div>
+
+    <div>
+        <h3>Demo Credentials</h3>
+        <p>Username: <strong>operator</strong></p>
+        <p>Password: <strong>operator123</strong></p>
+    </div>
+</body>
+</html>

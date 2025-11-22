@@ -20,4 +20,9 @@ public class ViewController {
     public String operatorView() {
         return "operator";
     }
+
+    @GetMapping("/login")
+    public String login() {
+        return "login";
+    }
 }
