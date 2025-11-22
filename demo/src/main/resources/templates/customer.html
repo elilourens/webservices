@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Portal</title>
+    <style> 
+        /* basic styling so page is actually readable */
+        body { 
+            margin: 20px;
+        }
+        div {
+            border: 1px solid black;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 5px;
+            border: 1px solid black;
+            text-align: left;
+        }
+        th {
+            background: lightblue;
+        }
+        input, select, button {
+            padding: 5px;
+            border: 1px solid black;
+        }
+        button {
+            background: white;
+            cursor: pointer;
+        }
+        .customer-info {
+            display: none;
+        }
+        .customer-info.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="/" class="back-link">&larr; Back to Home</a>
+        <div class="header-actions">
+            <h1>customer Portal</h1>
+            <button class="btn-refresh" onclick="refreshAllData()">Manual Data Refresh</button>
+        </div>
+    </div>
+
+    <div class="customer-selection">
+        <h2>Select Customer</h2>
+        <div class="customer-selector">
+            <label for="customer-select">Logged in as:</label>
+            <select id="customer-select">
+                <option value="">select a customer</option>
+            </select>
+        </div>
+        <div id="customer-info" class="customer-info">
+            <h3 id="customer-name"></h3>
+            <p><strong>Email:</strong> <span id="customer-email"></span></p>
+            <p><strong>Address:</strong> <span id="customer-address"></span></p>
+        </div>
+    </div>
+
+    <div class="order-section">
+        <h2>Place an Order</h2>
+        <div id="order-success" class="success" style="display: none;"></div>
+        <div id="order-error" class="error" style="display: none;"></div>
+
+        <form id="order-form" class="order-form">
+            <div class="form-group">
+                <label for="product-select">Select Product:</label>
+                <select id="product-select" required>
+                    <option value="">-- Choose a product --</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="quantity-input">Quantity:</label>
+                <input type="number" id="quantity-input" min="1" value="1" required>
+            </div>
+
+            <div id="order-summary" class="order-summary" style="display: none;">
+                <h3>Order Summary</h3>
+                <p><strong>Product:</strong> <span id="summary-product"></span></p>
+                <p><strong>Quantity:</strong> <span id="summary-quantity"></span></p>
+                <p><strong>Price per unit:</strong> £<span id="summary-unit-price"></span></p>
+                <p><strong>Total Price:</strong> £<span id="summary-total-price"></span></p>
+                <p><strong>Available Stock:</strong> <span id="summary-stock"></span></p>
+            </div>
+
+            <button type="submit" id="place-order-btn" class="btn btn-primary" disabled>Place Order</button>
+        </form>
+    </div>
+
+    <div class="my-orders-section">
+        <h2>My Orders</h2>
+        <div id="orders-loading" class="loading">Select a customer to view orders...</div>
+        <div id="orders-container"></div>
+    </div>
+
+    <div class="products-container">
+        <h2>Available Products</h2>
+        <div id="loading" class="loading">Loading products...</div>
+        <div id="error" class="error" style="display: none;"></div>
+        <div id="products-table" style="display: none;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Description</th>
+                        <th>Retail Price (GBP)</th>
+                        <th>Stock Level</th>
+                    </tr>
+                </thead>
+                <tbody id="products-body">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let selectedCustomer = null;
+        let customers = {};
+        let products = {};
+
+        async function loadCustomers() {
+            try {
+                const response = await fetch('/api/customers');
+                if (!response.ok) {
+                    throw new Error('Failed to load customers');
+                }
+                customers = await response.json();
+
+                const select = document.getElementById('customer-select');
+                Object.values(customers).forEach(customer => {
+                    const option = document.createElement('option');
+                    option.value = customer.id;
+                    option.textContent = customer.name;
+                    select.appendChild(option);
+                });
+
+                // default to select first customer
+                if (Object.keys(customers).length > 0) {
+                    const firstCustomerId = Object.keys(customers)[0];
+                    select.value = firstCustomerId;
+                    handleCustomerSelection(firstCustomerId);
+                }
+            } catch (error) {
+                console.error('Error loading customers:', error);
+            }
+        }
+
+        function handleCustomerSelection(customerId) {
+            if (!customerId) {
+                document.getElementById('customer-info').classList.remove('active');
+                selectedCustomer = null;
+                return;
+            }
+
+            selectedCustomer = customers[customerId];
+            document.getElementById('customer-name').textContent = selectedCustomer.name;
+            document.getElementById('customer-email').textContent = selectedCustomer.email;
+            document.getElementById('customer-address').textContent = selectedCustomer.postalAddress;
+            document.getElementById('customer-info').classList.add('active');
+
+            // store in localStorage for later use in calling APIs
+            localStorage.setItem('selectedCustomerId', customerId);
+
+            // load orders for selected customer
+            loadCustomerOrders(customerId);
+        }
+
+        document.getElementById('customer-select').addEventListener('change', (e) => {
+            handleCustomerSelection(e.target.value);
+        });
+
+        async function loadCustomerOrders(customerId) {
+            try {
+                document.getElementById('orders-loading').style.display = 'block';
+                document.getElementById('orders-container').innerHTML = '';
+
+                const response = await fetch(`/api/orders/customer/${customerId}`);
+                if (!response.ok) {
+                    throw new Error('Failed to load orders');
+                }
+
+                const orders = await response.json();
+                document.getElementById('orders-loading').style.display = 'none';
+
+                if (orders.length === 0) {
+                    document.getElementById('orders-container').innerHTML = '<div class="no-orders">No orders yet. Place your first order above!</div>';
+                    return;
+                }
+
+                const ordersContainer = document.getElementById('orders-container');
+                orders.forEach(order => {
+                    const orderCard = createOrderCard(order);
+                    ordersContainer.appendChild(orderCard);
+                });
+
+            } catch (error) {
+                document.getElementById('orders-loading').style.display = 'none';
+                document.getElementById('orders-container').innerHTML = `<div class="error">Error loading orders: ${error.message}</div>`;
+            }
+        }
+
+        function createOrderCard(order) {
+            const card = document.createElement('div');
+            card.className = `order-card ${order.status}`;
+            card.id = `order-${order.id}`;
+
+            const product = products[order.productId];
+            const productName = product ? product.description : order.productId;
+
+            const statusClass = `status-${order.status.replace(' ', '-')}`;
+            const canCancel = order.status === 'pending';
+
+            card.innerHTML = `
+                <div class="order-header">
+                    <h3 style="margin: 0;">0rder ${order.id}</h3>
+                    <span class="order-status ${statusClass}">${order.status.toUpperCase()}</span>
+                </div>
+                <p><strong>Product:</strong> ${productName}</p>
+                <p><strong>Quantity:</strong> ${order.quantity}</p>
+                <p><strong>Total Price:</strong> £${order.orderPrice.toFixed(2)}</p>
+                <p><strong>Order Date:</strong> ${new Date(order.orderDate).toLocaleString()}</p>
+                ${canCancel ? `<button class="btn btn-danger btn-small" onclick="cancelOrder('${order.id}')">Cancel Order</button>` : ''}
+            `;
+
+            return card;
+        }
+
+        async function cancelOrder(orderId) {
+            if (!confirm('Are you sure you want to cancel this order?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/orders/${orderId}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText);
+                }
+
+                // remove constructed order card from the ui
+                const orderCard = document.getElementById(`order-${orderId}`);
+                if (orderCard) {
+                    orderCard.remove();
+                }
+
+                // check if no orders left then display placeholder message
+                const ordersContainer = document.getElementById('orders-container');
+                if (ordersContainer.children.length === 0) {
+                    ordersContainer.innerHTML = '<div class="no-orders">No orders yet. Place your first order above!</div>';
+                }
+
+                alert('Order cancelled successfully');
+
+            } catch (error) {
+                alert('Error cancelling order: ' + error.message);
+            }
+        }
+
+        async function loadProducts() {
+            try {
+                const response = await fetch('/api/products');
+                if (!response.ok) {
+                    throw new Error('Failed to load products');
+                }
+                products = await response.json();
+
+                document.getElementById('loading').style.display = 'none';
+
+                if (Object.keys(products).length === 0) {
+                    document.getElementById('error').textContent = 'No products available. Please load products first using POST /api/products/load';
+                    document.getElementById('error').style.display = 'block';
+                    return;
+                }
+                
+                // populate products table
+                const tbody = document.getElementById('products-body');
+                Object.values(products).forEach(product => {
+                    const row = tbody.insertRow();
+                    row.insertCell(0).textContent = product.id;
+                    row.insertCell(1).textContent = product.description;
+                    row.insertCell(2).textContent = '£' + product.retailPrice.toFixed(2);
+                    row.insertCell(3).textContent = product.wholesaleStockLevel;
+                });
+
+                document.getElementById('products-table').style.display = 'block';
+
+                // populate product select dropdown for ordering with existing product list
+                const productSelect = document.getElementById('product-select');
+                Object.values(products).forEach(product => {
+                    const option = document.createElement('option');
+                    option.value = product.id;
+                    option.textContent = `${product.description} - £${product.retailPrice.toFixed(2)}`;
+                    productSelect.appendChild(option);
+                });
+
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').textContent = 'Error: ' + error.message;
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+
+        // order form handling
+        const productSelect = document.getElementById('product-select');
+        const quantityInput = document.getElementById('quantity-input');
+        const placeOrderBtn = document.getElementById('place-order-btn');
+
+        function updateOrderSummary() {
+            const productId = productSelect.value;
+            const quantity = parseInt(quantityInput.value) || 0;
+
+            if (!productId || !selectedCustomer) {
+                document.getElementById('order-summary').style.display = 'none';
+                placeOrderBtn.disabled = true;
+                return;
+            }
+
+            const product = products[productId];
+            const totalPrice = product.retailPrice * quantity;
+
+            document.getElementById('summary-product').textContent = product.description;
+            document.getElementById('summary-quantity').textContent = quantity;
+            document.getElementById('summary-unit-price').textContent = product.retailPrice.toFixed(2);
+            document.getElementById('summary-total-price').textContent = totalPrice.toFixed(2);
+            document.getElementById('summary-stock').textContent = product.wholesaleStockLevel;
+            document.getElementById('order-summary').style.display = 'block';
+
+            placeOrderBtn.disabled = false;
+        }
+
+        productSelect.addEventListener('change', updateOrderSummary);
+        quantityInput.addEventListener('input', updateOrderSummary);
+
+        document.getElementById('order-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!selectedCustomer) {
+                document.getElementById('order-error').textContent = 'Please select a customer first';
+                document.getElementById('order-error').style.display = 'block';
+                return;
+            }
+
+            const productId = productSelect.value;
+            const quantity = parseInt(quantityInput.value);
+
+            try {
+                placeOrderBtn.disabled = true;
+                placeOrderBtn.textContent = 'Placing order...';
+
+                const response = await fetch('/api/orders', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        customerId: selectedCustomer.id,
+                        productId: productId,
+                        quantity: quantity
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText);
+                }
+
+                const order = await response.json();
+
+                document.getElementById('order-error').style.display = 'none';
+                document.getElementById('order-success').textContent = `Order placed successfully! Order ID: ${order.id}`;
+                document.getElementById('order-success').style.display = 'block';
+
+                // reset form
+                productSelect.value = '';
+                quantityInput.value = 1;
+                document.getElementById('order-summary').style.display = 'none';
+                placeOrderBtn.disabled = true;
+
+                // refresh orders list 
+                if (selectedCustomer) {
+                    loadCustomerOrders(selectedCustomer.id);
+                }
+
+                setTimeout(() => {
+                    document.getElementById('order-success').style.display = 'none';
+                }, 5000);
+
+            } catch (error) {
+                document.getElementById('order-error').textContent = 'Error: ' + error.message;
+                document.getElementById('order-error').style.display = 'block';
+            } finally {
+                placeOrderBtn.textContent = 'Place Order';
+            }
+        });
+
+        function refreshAllData() {
+            loadCustomers();
+            loadProducts();
+            if (selectedCustomer) {
+                loadCustomerOrders(selectedCustomer.id);
+            }
+        }
+
+        // load data on page load by default - user can also reload manally with button at the top of the page. 
+        loadCustomers();
+        loadProducts();
+    </script>
+</body>
+</html>

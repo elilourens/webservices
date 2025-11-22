@@ -89,7 +89,10 @@ public class WholesaleApiService {
             double wholesalePrice = Double.parseDouble(extractJsonValue(response, "price"));
             int stockLevel = Integer.parseInt(extractJsonValue(response, "in_stock"));
 
-            double retailPrice = wholesalePrice * 1.30;
+            // 5% dropshipping platform markup and then I remove 1 penny to make prices more appealing pychologically
+            double priceWith5Percent = wholesalePrice * 1.05;
+            double roundedPrice = Math.round(priceWith5Percent);
+            double retailPrice = roundedPrice - 0.01;
 
             return new Product(id, description, retailPrice, stockLevel, wholesalePrice);
 
@@ -133,6 +136,8 @@ public class WholesaleApiService {
     }
 
     private String extractJsonValue(String json, String key) {
+
+        // this regex finds the value for a given key in a simple JSON string e.g. "price":29.99 - extracts 29.99
         Pattern pattern = Pattern.compile("\"" + key + "\":(\"[^\"]*\"|[^,}]+)");
         Matcher matcher = pattern.matcher(json);
 

@@ -3,7 +3,9 @@ package Web_Services_Assignment.demo.service;
 import Web_Services_Assignment.demo.model.Order;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -40,5 +42,16 @@ public class OrderService {
 
     public boolean orderExists(String id) {
         return orders.containsKey(id);
+    }
+
+    // this works by getting all orders in the hashmap and then checking their value to see if the customerId matches
+    public List<Order> getOrdersByCustomerId(String customerId) {
+        List<Order> customerOrders = new ArrayList<>();
+        for (Order order : orders.values()) {
+            if (order.getCustomerId().equals(customerId)) {
+                customerOrders.add(order);
+            }
+        }
+        return customerOrders;
     }
 }

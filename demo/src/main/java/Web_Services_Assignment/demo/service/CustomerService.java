@@ -41,4 +41,18 @@ public class CustomerService {
     public boolean customerExists(String id) {
         return customers.containsKey(id);
     }
+
+    public void addRevenue(String customerId, double amount) {
+        Customer customer = customers.get(customerId);
+        if (customer != null) {
+            customer.setRevenue(customer.getRevenue() + amount);
+        }
+    }
+
+    public void subtractRevenue(String customerId, double amount) {
+        Customer customer = customers.get(customerId);
+        if (customer != null) {
+            customer.setRevenue(customer.getRevenue() - amount);
+        }
+    }
 }

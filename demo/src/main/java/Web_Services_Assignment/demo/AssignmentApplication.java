@@ -2,6 +2,7 @@ package Web_Services_Assignment.demo;
 
 import Web_Services_Assignment.demo.model.Customer;
 import Web_Services_Assignment.demo.service.CustomerService;
+import Web_Services_Assignment.demo.service.WholesaleApiService;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -15,39 +16,42 @@ public class AssignmentApplication {
 	}
 
 	@Bean
-	public CommandLineRunner loadInitialCustomers(CustomerService customerService) {
+	public CommandLineRunner loadInitialData(CustomerService customerService, WholesaleApiService wholesaleApiService) {
 		return args -> {
-			
+
 			Customer customer1 = new Customer(
-				"C001",
-				"John Smith",
-				"john.smith@example.com",
-				"123 Main Street, New York, NY 10001",
+				"1",
+				"Hamish MacLeod",
+				"Hamish.Macleod@example.com",
+				"12 Royal Mile, Edinburgh, EH1 2PB",
 				0
 			);
 			customerService.addCustomer(customer1);
 
-			
+
 			Customer customer2 = new Customer(
-				"C002",
-				"Sarah Johnson",
-				"sarah.johnson@example.com",
-				"456 Oak Avenue, Los Angeles, CA 90001",
+				"2",
+				"Fiona Campbell",
+				"Fiona.Campbell@example.com",
+				"45 Sauchiehall Street, Glasgow, G2 3AT",
 				0
 			);
 			customerService.addCustomer(customer2);
 
-			
+
 			Customer customer3 = new Customer(
-				"C003",
-				"Michael Chen",
-				"michael.chen@example.com",
-				"789 Pine Road, Chicago, IL 60601",
+				"3",
+				"Angus Fraser",
+				"Angus.Fraser@example.com",
+				"78 Union Street, Aberdeen, AB11 6BD",
 				0
 			);
 			customerService.addCustomer(customer3);
 
 			System.out.println("Loaded 3 initial customers");
+
+			System.out.println("Loading products from wholesale API...");
+			wholesaleApiService.loadAllProducts();
 		};
 	}
 

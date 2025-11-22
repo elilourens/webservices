@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Management System</title>
+    <style>
+        /* Basic styling for the ui ---- THIS page is for navigating between views only. */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 50px;
+            background-color: white;
+        }
+        .container {
+            border: 2px solid black;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        .options {
+            margin-top: 20px;
+        }
+        .option-card {
+            display: block;
+            padding: 20px;
+            border: 1px solid black;
+            text-align: center;
+            text-decoration: none;
+            color: black;
+            margin-bottom: 15px;
+        }
+        .option-card h2 {
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Order Management System</h1>
+        <div class="options">
+            <a href="/customer" class="option-card"> // navigate to customer view
+                <h2>Customer Portal</h2>
+                <p>View products and manage orders</p>
+            </a>
+            <a href="/operator" class="option-card"> // navigate to operator view
+                <h2>Operator Portal</h2>
+                <p>Manage orders and products</p>
+            </a>
+        </div>
+    </div>
+</body>
+</html>

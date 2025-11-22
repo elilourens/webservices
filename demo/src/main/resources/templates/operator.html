@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Operator Portal</title>
+    <style>
+        /* super basic styling so page is understandable */
+        body {
+            margin: 20px;
+        }
+        div {
+            border: 1px solid black;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 5px;
+            border: 1px solid black;
+            text-align: left;
+        }
+        th {
+            background: lightcoral;
+        }
+        input, select, button {
+            padding: 5px;
+            border: 1px solid black;
+        }
+        button {
+            background: white;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="/" class="back-link">&larr; Back to Home</a>
+        <div class="header-actions">
+            <h1>Operator Portal</h1>
+            <button class="btn-refresh" onclick="refreshAllData()">Manual Data Refresh</button>
+        </div>
+    </div>
+
+    <div class="orders-container">
+        <h2>Order Management</h2>
+        <div id="orders-loading" class="loading">Loading orders...</div>
+        <div id="orders-error" class="error" style="display: none;"></div>
+        <div id="orders-table" style="display: none;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>OrderID</th>
+                        <th>Customer</th>
+                        <th>Product</th>
+                        <th>Quantity</th>
+                        <th>Total Price</th>
+                        <th>Status</th>
+                        <th>Order Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="orders-body">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="orders-container">
+        <h2>Customer Revenue</h2>
+        <div id="customers-loading" class="loading">Loading customers...</div>
+        <div id="customers-error" class="error" style="display: none;"></div>
+        <div id="customers-table" style="display: none;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Customer ID</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Postal Address</th>
+                        <th>Total Orders</th>
+                        <th>Total Revenue</th>
+                    </tr>
+                </thead>
+                <tbody id="customers-body">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="products-container">
+        <h2>Product Management</h2>
+        <div id="loading" class="loading">Loading products...</div>
+        <div id="error" class="error" style="display: none;"></div>
+        <div id="products-table" style="display: none;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Description</th>
+                        <th>Wholesale Price (GBP)</th>
+                        <th>Retail Price (GBP)</th>
+                        <th>Stock Level</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="products-body">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        async function loadProducts() {
+            try {
+                const response = await fetch('/api/products');
+                if (!response.ok) {
+                    throw new Error('Failed to load products');
+                }
+                const products = await response.json();
+
+                document.getElementById('loading').style.display = 'none';
+
+                if (Object.keys(products).length === 0) {
+                    document.getElementById('error').textContent = 'No products available. Please load products first using POST /api/products/load';
+                    document.getElementById('error').style.display = 'block';
+                    return;
+                }
+
+                const tbody = document.getElementById('products-body');
+                tbody.innerHTML = '';
+                Object.values(products).forEach(product => {
+                    const row = tbody.insertRow();
+                    row.id = `product-row-${product.id}`;
+
+                    row.insertCell(0).textContent = product.id;
+                    row.insertCell(1).textContent = product.description;
+                    row.insertCell(2).textContent = '£' + product.wholesalePrice.toFixed(2);
+
+                    const priceCell = row.insertCell(3);
+                    priceCell.innerHTML = `
+                        <span id="price-display-${product.id}">£${product.retailPrice.toFixed(2)}</span>
+                        <input type="number" id="price-input-${product.id}" style="display: none; width: 80px;"
+                               step="0.01" min="${(product.wholesalePrice + 0.01).toFixed(2)}"
+                               value="${product.retailPrice.toFixed(2)}">
+                    `;
+
+                    row.insertCell(4).textContent = product.wholesaleStockLevel;
+
+                    const actionsCell = row.insertCell(5);
+                    actionsCell.innerHTML = `
+                        <button class="btn btn-success btn-small" id="edit-btn-${product.id}"
+                                onclick="editPrice('${product.id}')">Edit Price</button>
+                        <button class="btn btn-success btn-small" id="save-btn-${product.id}"
+                                style="display: none;" onclick="savePrice('${product.id}', ${product.wholesalePrice})">Save</button>
+                        <button class="btn btn-warning btn-small" id="cancel-btn-${product.id}"
+                                style="display: none;" onclick="cancelEdit('${product.id}', ${product.retailPrice})">Cancel</button>
+                    `;
+                });
+
+                document.getElementById('products-table').style.display = 'block';
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').textContent = 'Error: ' + error.message;
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+
+        async function loadOrders() {
+            try {
+                const [ordersResponse, customersResponse, productsResponse] = await Promise.all([
+                    fetch('/api/orders'),
+                    fetch('/api/customers'),
+                    fetch('/api/products')
+                ]);
+
+                if (!ordersResponse.ok || !customersResponse.ok || !productsResponse.ok) {
+                    throw new Error('Failed to load data');
+                }
+
+                const ordersMap = await ordersResponse.json();
+                const customersMap = await customersResponse.json();
+                const productsMap = await productsResponse.json();
+
+                const orders = Object.values(ordersMap);
+
+                document.getElementById('orders-loading').style.display = 'none';
+
+                if (orders.length === 0) {
+                    document.getElementById('orders-error').textContent = 'No orders yet';
+                    document.getElementById('orders-error').style.display = 'block';
+                    return;
+                }
+
+                const tbody = document.getElementById('orders-body');
+                tbody.innerHTML = '';
+
+                orders.forEach(order => {
+                    const customer = customersMap[order.customerId];
+                    const product = productsMap[order.productId];
+
+                    const row = tbody.insertRow();
+                    row.id = `order-row-${order.id}`;
+
+                    row.insertCell(0).textContent = order.id;
+                    row.insertCell(1).textContent = customer ? customer.name : order.customerId;
+                    row.insertCell(2).textContent = product ? product.description : order.productId;
+                    row.insertCell(3).textContent = order.quantity;
+                    row.insertCell(4).textContent = '£' + order.orderPrice.toFixed(2);
+
+                    const statusCell = row.insertCell(5);
+                    const badgeClass = `badge-${order.status.replace(' ', '-')}`;
+                    statusCell.innerHTML = `<span class="status-badge ${badgeClass}">${order.status.toUpperCase()}</span>`;
+
+                    row.insertCell(6).textContent = new Date(order.orderDate).toLocaleString();
+
+                    const actionsCell = row.insertCell(7);
+                    if (order.status === 'pending') {
+                        actionsCell.innerHTML = `
+                            <button class="btn btn-success" onclick="updateOrderStatus('${order.id}', 'shipped')">Mark Shipped</button>
+                            <button class="btn btn-warning" onclick="updateOrderStatus('${order.id}', 'out of stock')">Out of Stock</button>
+                        `;
+                    } else if (order.status === 'out of stock') {
+                        actionsCell.innerHTML = `
+                            <button class="btn btn-success" onclick="updateOrderStatus('${order.id}', 'shipped')">Mark Shipped</button>
+                        `;
+                    } else {
+                        actionsCell.textContent = '-';
+                    }
+                });
+
+                document.getElementById('orders-table').style.display = 'block';
+
+            } catch (error) {
+                document.getElementById('orders-loading').style.display = 'none';
+                document.getElementById('orders-error').textContent = 'Error: ' + error.message;
+                document.getElementById('orders-error').style.display = 'block';
+            }
+        }
+
+        async function updateOrderStatus(orderId, newStatus) {
+            try {
+                const response = await fetch(`/api/orders/${orderId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ status: newStatus })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to update order status');
+                }
+
+                loadOrders();
+
+            } catch (error) {
+                alert('Error updating order status: ' + error.message);
+            }
+        }
+
+        // The operator needs to see the customers along with their total revenue
+        async function loadCustomersWithRevenue() {
+            try {
+                const [customersResponse, ordersResponse] = await Promise.all([
+                    fetch('/api/customers'),
+                    fetch('/api/orders')
+                ]);
+
+                if (!customersResponse.ok || !ordersResponse.ok) {
+                    throw new Error('Failed to load data');
+                }
+
+                const customersMap = await customersResponse.json();
+                const ordersMap = await ordersResponse.json();
+
+                const customers = Object.values(customersMap);
+                const orders = Object.values(ordersMap);
+
+                document.getElementById('customers-loading').style.display = 'none';
+
+                // shouldnt ever happen as we 3 customers are hardcoded at startup but who knows
+                if (customers.length === 0) {
+                    document.getElementById('customers-error').textContent = 'No customers found';
+                    document.getElementById('customers-error').style.display = 'block';
+                    return;
+                }
+
+                const tbody = document.getElementById('customers-body');
+                tbody.innerHTML = '';
+
+                customers.forEach(customer => {
+                    const customerOrders = orders.filter(order => order.customerId === customer.id);
+                    const totalOrders = customerOrders.length;
+
+                    const row = tbody.insertRow();
+                    row.insertCell(0).textContent = customer.id;
+                    row.insertCell(1).textContent = customer.name;
+                    row.insertCell(2).textContent = customer.email;
+                    row.insertCell(3).textContent = customer.postalAddress;
+                    row.insertCell(4).textContent = totalOrders;
+                    row.insertCell(5).textContent = '£' + customer.revenue.toFixed(2); //money
+                });
+
+                document.getElementById('customers-table').style.display = 'block';
+
+            } catch (error) {
+                document.getElementById('customers-loading').style.display = 'none';
+                document.getElementById('customers-error').textContent = 'Error: ' + error.message;
+                document.getElementById('customers-error').style.display = 'block';
+            }
+        }
+
+        // funcion to edit the price inline
+        function editPrice(productId) {
+            document.getElementById(`price-display-${productId}`).style.display = 'none';
+            document.getElementById(`price-input-${productId}`).style.display = 'inline';
+            document.getElementById(`edit-btn-${productId}`).style.display = 'none';
+            document.getElementById(`save-btn-${productId}`).style.display = 'inline';
+            document.getElementById(`cancel-btn-${productId}`).style.display = 'inline';
+        }
+
+        // function to cancel editing the price and revert it back to oriiginal. 
+        function cancelEdit(productId, originalPrice) {
+            document.getElementById(`price-display-${productId}`).style.display = 'inline';
+            document.getElementById(`price-input-${productId}`).style.display = 'none';
+            document.getElementById(`price-input-${productId}`).value = originalPrice.toFixed(2);
+            document.getElementById(`edit-btn-${productId}`).style.display = 'inline';
+            document.getElementById(`save-btn-${productId}`).style.display = 'none';
+            document.getElementById(`cancel-btn-${productId}`).style.display = 'none';
+        }
+
+        // if user is happ with updated price -> call api to save the change in the hashmap to reflect changes.
+        async function savePrice(productId, wholesalePrice) {
+            const newPrice = parseFloat(document.getElementById(`price-input-${productId}`).value);
+
+            if (newPrice <= wholesalePrice) {
+                alert(`Retail price must be higher than wholesale price (£${wholesalePrice.toFixed(2)})`);
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/products/${productId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ retailPrice: newPrice })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText);
+                }
+
+                const updatedProduct = await response.json();
+
+                // update display
+                document.getElementById(`price-display-${productId}`).textContent = '£' + updatedProduct.retailPrice.toFixed(2);
+                document.getElementById(`price-display-${productId}`).style.display = 'inline';
+                document.getElementById(`price-input-${productId}`).style.display = 'none';
+                document.getElementById(`edit-btn-${productId}`).style.display = 'inline';
+                document.getElementById(`save-btn-${productId}`).style.display = 'none';
+                document.getElementById(`cancel-btn-${productId}`).style.display = 'none';
+
+                alert('Price updated successfully!');
+
+            } catch (error) {
+                alert('Error updating price: ' + error.message);
+            }
+        }
+
+        // optional function to refresh the data manually by a user if wanted.
+        function refreshAllData() {
+            loadProducts();
+            loadOrders();
+            loadCustomersWithRevenue();
+        }
+
+        loadProducts();
+        loadOrders();
+        loadCustomersWithRevenue();
+    </script>
+</body>
+</html>
