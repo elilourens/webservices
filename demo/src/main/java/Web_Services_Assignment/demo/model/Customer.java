@@ -6,6 +6,7 @@ public class Customer {
     private String name;
     private String email;
     private String postalAddress;
+    private double revenue;
 
     public Customer() {
     }
@@ -15,6 +16,15 @@ public class Customer {
         this.name = name;
         this.email = email;
         this.postalAddress = postalAddress;
+        this.revenue = 0.0;
+    }
+
+    public Customer(String id, String name, String email, String postalAddress, double revenue) {
+        this.id = id;
+        this.name = name;
+        this.email = email;
+        this.postalAddress = postalAddress;
+        this.revenue = revenue;
     }
 
     public String getId() {
@@ -47,5 +57,13 @@ public class Customer {
 
     public void setPostalAddress(String postalAddress) {
         this.postalAddress = postalAddress;
+    }
+
+    public double getRevenue() {
+        return revenue;
+    }
+
+    public void setRevenue(double revenue) {
+        this.revenue = revenue;
     }
 }
